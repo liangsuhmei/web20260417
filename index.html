@@ -1,0 +1,270 @@
+<!DOCTYPE html>
+<!--
+Created using JS Bin
+http://jsbin.com
+
+Copyright (c) 2026 by anonymous (http://jsbin.com/segirokebi/2/edit)
+
+Released under the MIT license: http://jsbin.mit-license.org
+-->
+<meta name="robots" content="noindex">
+<html lang="zh-TW">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>清新極簡碼錶計時器</title>
+    <style>
+        :root {
+            --bg-page: #f9f9f2; /* 柔和米白色背景 */
+            --card-bg: #ffffff;
+            --text-dark: #1a202c;
+            --text-light: #718096;
+            --accent-gradient: linear-gradient(135deg, #a5f3fc 0%, #d9f99d 50%, #fde68a 100%);
+            --btn-bg: #dbeafe;
+            --btn-text: #1e40af;
+            --circle-border: #e2e8f0;
+        }
+
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+            user-select: none;
+        }
+
+        body {
+            background-color: var(--bg-page);
+            font-family: 'Segoe UI', system-ui, -apple-system, sans-serif;
+            color: var(--text-dark);
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            height: 100vh;
+        }
+
+        /* 主容器 */
+        .app-container {
+            background: var(--card-bg);
+            width: 360px;
+            padding: 40px 20px;
+            border-radius: 40px;
+            box-shadow: 0 10px 25px rgba(0, 0, 0, 0.05);
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            text-align: center;
+        }
+
+        /* 漸層外環容器 */
+        .timer-outer-circle {
+            width: 280px;
+            height: 280px;
+            border-radius: 50%;
+            position: relative;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            background: var(--accent-gradient);
+            padding: 8px; /* 漸層邊框厚度 */
+            margin-bottom: 40px;
+        }
+
+        /* 內圓白色區塊 */
+        .timer-inner-circle {
+            width: 100%;
+            height: 100%;
+            background: white;
+            border-radius: 50%;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            position: relative;
+            box-shadow: inset 0 2px 10px rgba(0, 0, 0, 0.05);
+        }
+
+        /* 時間數字樣式 */
+        .time-display {
+            font-size: 3.5rem;
+            font-weight: 500;
+            color: var(--text-dark);
+            font-variant-numeric: tabular-nums;
+            letter-spacing: -1px;
+        }
+
+        /* 按鈕區域：改為水平並排 */
+        .button-group {
+            display: flex;
+            gap: 20px;
+            width: 100%;
+            justify-content: center;
+        }
+
+        button {
+            flex: 1;
+            max-width: 140px;
+            padding: 14px 0;
+            border-radius: 30px;
+            border: 1px solid rgba(30, 64, 175, 0.1);
+            font-size: 1.2rem;
+            font-weight: 500;
+            cursor: pointer;
+            transition: all 0.2s ease;
+            outline: none;
+        }
+
+        /* 主按鈕 (開始/暫停) */
+        .btn-main {
+            background-color: var(--btn-bg);
+            color: var(--btn-text);
+        }
+
+        .btn-main:hover {
+            background-color: #bfdbfe;
+            transform: translateY(-1px);
+        }
+
+        .btn-main.pausing {
+            background-color: #fef3c7;
+            color: #92400e;
+        }
+
+        /* 重置按鈕 */
+        .btn-reset {
+            background-color: var(--btn-bg);
+            color: var(--btn-text);
+        }
+
+        .btn-reset:hover:not(:disabled) {
+            background-color: #fecaca;
+            color: #991b1b;
+        }
+
+        .btn-reset:disabled {
+            opacity: 0.3;
+            cursor: not-allowed;
+            background-color: #f1f5f9;
+            color: #94a3b8;
+        }
+
+        /* 動態旋轉效果 (計時中) */
+        @keyframes rotate {
+            from { transform: rotate(0deg); }
+            to { transform: rotate(360deg); }
+        }
+
+        .timer-outer-circle.active {
+            animation: rotate 10s linear infinite;
+        }
+
+        .timer-inner-circle.active {
+            /* 修正內部內容不跟著旋轉 */
+            animation: rotate 10s linear infinite reverse;
+        }
+
+    </style>
+</head>
+<body>
+
+    <div class="app-container">
+        <!-- 圓形計時顯示區 -->
+        <div class="timer-outer-circle" id="outerCircle">
+            <div class="timer-inner-circle" id="innerCircle">
+                <div class="time-display" id="display">00:00:00</div>
+            </div>
+        </div>
+
+        <!-- 按鈕區 -->
+        <div class="button-group">
+            <button id="startBtn" class="btn-main">開始</button>
+            <button id="resetBtn" class="btn-reset" disabled>重置</button>
+        </div>
+    </div>
+
+    <script>
+        let startTime = 0;
+        let elapsedTime = 0;
+        let timerInterval = null;
+        let status = 'INDEX'; 
+
+        const display = document.getElementById('display');
+        const startBtn = document.getElementById('startBtn');
+        const resetBtn = document.getElementById('resetBtn');
+        const outerCircle = document.getElementById('outerCircle');
+        const innerCircle = document.getElementById('innerCircle');
+
+        function formatTime(ms) {
+            const totalSeconds = Math.floor(ms / 1000);
+            const minutes = Math.floor(totalSeconds / 60);
+            const seconds = totalSeconds % 60;
+            const centiseconds = Math.floor((ms % 1000) / 10);
+
+            return (
+                minutes.toString().padStart(2, '0') + ':' +
+                seconds.toString().padStart(2, '0') + ':' +
+                centiseconds.toString().padStart(2, '0')
+            );
+        }
+
+        function updateDisplay() {
+            display.textContent = formatTime(elapsedTime);
+        }
+
+        function startTimer() {
+            status = 'RUNNING';
+            startTime = Date.now() - elapsedTime;
+            
+            timerInterval = setInterval(() => {
+                elapsedTime = Date.now() - startTime;
+                updateDisplay();
+            }, 10);
+
+            startBtn.textContent = '暫停';
+            startBtn.classList.add('pausing');
+            resetBtn.disabled = false;
+            
+            // 加入旋轉動畫效果
+            outerCircle.classList.add('active');
+            innerCircle.classList.add('active');
+        }
+
+        function pauseTimer() {
+            status = 'PAUSED';
+            clearInterval(timerInterval);
+            
+            startBtn.textContent = '繼續';
+            startBtn.classList.remove('pausing');
+            
+            outerCircle.classList.remove('active');
+            innerCircle.classList.remove('active');
+        }
+
+        function resetTimer() {
+            status = 'INDEX';
+            clearInterval(timerInterval);
+            elapsedTime = 0;
+            updateDisplay();
+
+            startBtn.textContent = '開始';
+            startBtn.classList.remove('pausing');
+            resetBtn.disabled = true;
+            
+            outerCircle.classList.remove('active');
+            innerCircle.classList.remove('active');
+        }
+
+        startBtn.addEventListener('click', () => {
+            if (status === 'INDEX' || status === 'PAUSED') {
+                startTimer();
+            } else if (status === 'RUNNING') {
+                pauseTimer();
+            }
+        });
+
+        resetBtn.addEventListener('click', () => {
+            resetTimer();
+        });
+
+        updateDisplay();
+    </script>
+</body>
+</html>
