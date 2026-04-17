@@ -1,0 +1,314 @@
+<!DOCTYPE html>
+<!--
+Created using JS Bin
+http://jsbin.com
+
+Copyright (c) 2026 by anonymous (http://jsbin.com/guquwuberu/1/edit)
+
+Released under the MIT license: http://jsbin.mit-license.org
+-->
+<meta name="robots" content="noindex">
+<html lang="zh-TW">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>深色電子儀表碼錶</title>
+    <style>
+        :root {
+            --bg-color: #1a202c;
+            --panel-bg: #2d3748;
+            --neon-cyan: #00f2ff;
+            --neon-dim: rgba(0, 242, 255, 0.2);
+            --text-color: #e2e8f0;
+            --segment-font: 'Courier New', Courier, monospace;
+        }
+
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+            user-select: none;
+        }
+
+        body {
+            background-color: #0f172a;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            height: 100vh;
+            font-family: 'Inter', system-ui, sans-serif;
+        }
+
+        /* 主容器 */
+        .app-container {
+            background-color: var(--panel-bg);
+            width: 380px;
+            padding: 50px 30px;
+            border-radius: 20px;
+            box-shadow: 0 0 40px rgba(0, 0, 0, 0.6);
+            border: 1px solid #4a5568;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            position: relative;
+        }
+
+        /* 外部切角效果 (模擬圖中的造型) */
+        .app-container::before {
+            content: '';
+            position: absolute;
+            top: -2px; left: -2px; right: -2px; bottom: -2px;
+            border-radius: 22px;
+            background: linear-gradient(135deg, #4a5568 0%, transparent 50%, #4a5568 100%);
+            z-index: -1;
+        }
+
+        /* 刻度圓環容器 */
+        .gauge-container {
+            width: 280px;
+            height: 280px;
+            border-radius: 50%;
+            position: relative;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            margin-bottom: 50px;
+            background: radial-gradient(circle, #1a202c 60%, #171923 100%);
+            box-shadow: inset 0 0 20px rgba(0, 0, 0, 0.5);
+        }
+
+        /* 模擬刻度線 */
+        .ticks {
+            position: absolute;
+            width: 100%;
+            height: 100%;
+            border-radius: 50%;
+        }
+
+        .tick {
+            position: absolute;
+            width: 2px;
+            height: 10px;
+            background-color: #4a5568;
+            left: 50%;
+            transform-origin: 0 140px;
+        }
+
+        .tick.highlight {
+            background-color: var(--neon-cyan);
+            box-shadow: 0 0 8px var(--neon-cyan);
+        }
+
+        /* 時間顯示 */
+        .time-display {
+            font-family: var(--segment-font);
+            font-size: 3rem;
+            color: var(--neon-cyan);
+            text-shadow: 0 0 15px var(--neon-cyan);
+            z-index: 10;
+            font-weight: bold;
+        }
+
+        /* 星星背景效果 */
+        .stars {
+            position: absolute;
+            width: 100%;
+            height: 100%;
+            pointer-events: none;
+        }
+
+        /* 按鈕區域 */
+        .button-group {
+            display: flex;
+            gap: 20px;
+            width: 100%;
+        }
+
+        button {
+            flex: 1;
+            padding: 14px 0;
+            border-radius: 8px;
+            font-size: 1.2rem;
+            font-weight: bold;
+            cursor: pointer;
+            transition: all 0.2s ease;
+            text-transform: uppercase;
+            letter-spacing: 2px;
+            position: relative;
+            overflow: hidden;
+            border: 2px solid var(--neon-cyan);
+            background: linear-gradient(to bottom, #4a5568 0%, #2d3748 100%);
+            color: var(--text-color);
+            box-shadow: 0 0 10px rgba(0, 242, 255, 0.2);
+        }
+
+        button::after {
+            content: '';
+            position: absolute;
+            top: 0; left: 0; right: 0; height: 50%;
+            background: rgba(255, 255, 255, 0.05);
+            pointer-events: none;
+        }
+
+        button:hover:not(:disabled) {
+            box-shadow: 0 0 20px var(--neon-cyan);
+            color: #fff;
+            text-shadow: 0 0 5px #fff;
+        }
+
+        button:active:not(:disabled) {
+            transform: scale(0.98);
+        }
+
+        button:disabled {
+            border-color: #4a5568;
+            color: #718096;
+            cursor: not-allowed;
+            box-shadow: none;
+            opacity: 0.5;
+        }
+
+        /* 暫停中狀態 */
+        button.pausing {
+            border-color: #f6e05e;
+            box-shadow: 0 0 10px rgba(246, 224, 94, 0.2);
+        }
+
+        button.pausing:hover {
+            box-shadow: 0 0 20px #f6e05e;
+        }
+
+    </style>
+</head>
+<body>
+
+    <div class="app-container">
+        <!-- 儀表盤區域 -->
+        <div class="gauge-container">
+            <div class="stars" id="stars"></div>
+            <div class="ticks" id="tickContainer"></div>
+            <div class="time-display" id="display">00:00:00</div>
+        </div>
+
+        <!-- 按鈕區 -->
+        <div class="button-group">
+            <button id="startBtn">開始</button>
+            <button id="resetBtn" disabled>重置</button>
+        </div>
+    </div>
+
+    <script>
+        let startTime = 0;
+        let elapsedTime = 0;
+        let timerInterval = null;
+        let status = 'INDEX'; 
+
+        const display = document.getElementById('display');
+        const startBtn = document.getElementById('startBtn');
+        const resetBtn = document.getElementById('resetBtn');
+        const tickContainer = document.getElementById('tickContainer');
+        const starsContainer = document.getElementById('stars');
+
+        // 初始化刻度 (60 個刻度)
+        function initTicks() {
+            for (let i = 0; i < 60; i++) {
+                const tick = document.createElement('div');
+                tick.className = 'tick';
+                tick.style.transform = `rotate(${i * 6}deg)`;
+                tickContainer.appendChild(tick);
+            }
+        }
+
+        // 初始化背景星星
+        function initStars() {
+            for (let i = 0; i < 20; i++) {
+                const star = document.createElement('div');
+                star.style.position = 'absolute';
+                star.style.width = '2px';
+                star.style.height = '2px';
+                star.style.backgroundColor = 'white';
+                star.style.borderRadius = '50%';
+                star.style.top = Math.random() * 100 + '%';
+                star.style.left = Math.random() * 100 + '%';
+                star.style.opacity = Math.random();
+                starsContainer.appendChild(star);
+            }
+        }
+
+        function formatTime(ms) {
+            const totalSeconds = Math.floor(ms / 1000);
+            const minutes = Math.floor(totalSeconds / 60);
+            const seconds = totalSeconds % 60;
+            const centiseconds = Math.floor((ms % 1000) / 10);
+
+            return (
+                minutes.toString().padStart(2, '0') + ':' +
+                seconds.toString().padStart(2, '0') + ':' +
+                centiseconds.toString().padStart(2, '0')
+            );
+        }
+
+        function updateUI(ms) {
+            display.textContent = formatTime(ms);
+            
+            // 更新刻度高亮
+            const currentSecond = Math.floor((ms / 1000) % 60);
+            const ticks = document.querySelectorAll('.tick');
+            ticks.forEach((t, index) => {
+                if (index <= currentSecond && ms > 0) {
+                    t.classList.add('highlight');
+                } else {
+                    t.classList.remove('highlight');
+                }
+            });
+        }
+
+        function startTimer() {
+            status = 'RUNNING';
+            startTime = Date.now() - elapsedTime;
+            
+            timerInterval = setInterval(() => {
+                elapsedTime = Date.now() - startTime;
+                updateUI(elapsedTime);
+            }, 10);
+
+            startBtn.textContent = '暫停';
+            startBtn.classList.add('pausing');
+            resetBtn.disabled = false;
+        }
+
+        function pauseTimer() {
+            status = 'PAUSED';
+            clearInterval(timerInterval);
+            startBtn.textContent = '繼續';
+            startBtn.classList.remove('pausing');
+        }
+
+        function resetTimer() {
+            status = 'INDEX';
+            clearInterval(timerInterval);
+            elapsedTime = 0;
+            updateUI(0);
+
+            startBtn.textContent = '開始';
+            startBtn.classList.remove('pausing');
+            resetBtn.disabled = true;
+        }
+
+        startBtn.addEventListener('click', () => {
+            if (status === 'INDEX' || status === 'PAUSED') {
+                startTimer();
+            } else if (status === 'RUNNING') {
+                pauseTimer();
+            }
+        });
+
+        resetBtn.addEventListener('click', resetTimer);
+
+        // 初始化
+        initTicks();
+        initStars();
+        updateUI(0);
+    </script>
+</body>
+</html>
